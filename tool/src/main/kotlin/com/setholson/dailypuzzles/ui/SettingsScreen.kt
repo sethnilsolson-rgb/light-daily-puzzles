@@ -97,16 +97,33 @@ class SettingsScreen(
 ) : LightScreen<Unit, SettingsViewModel>(sealedActivity) {
 
     private val repository by lazy { PuzzleRepository.getInstance(lightContext) }
+    private val isForegroundFlow = MutableStateFlow(true)
 
     override val viewModelClass: Class<SettingsViewModel>
         get() = SettingsViewModel::class.java
 
     override fun createViewModel(): SettingsViewModel = SettingsViewModel(repository)
 
+    override fun willShow() {
+        super.willShow()
+        isForegroundFlow.value = true
+    }
+
+    override fun willHide() {
+        isForegroundFlow.value = false
+        super.willHide()
+    }
+
+    override fun onAppPause() {
+        isForegroundFlow.value = false
+        super.onAppPause()
+    }
+
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val settings by viewModel.settings.collectAsState()
+        val isForeground by isForegroundFlow.collectAsState()
         val lockedToday = settings.lockedUntilDateIso == viewModel.todayIso
 
         LightTheme(colors = themeColors) {
@@ -121,7 +138,8 @@ class SettingsScreen(
                     .swipeToBack { goBack() },
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    LightTopBar(
+                    BatteryTopBar(
+                        isForeground = isForeground,
                         leftButton = LightBarButton.LightIcon(
                             icon = LightIcons.BACK,
                             onClick = { goBack() },

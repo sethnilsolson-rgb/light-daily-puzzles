@@ -412,16 +412,33 @@ class ChessScreen(
 ) : LightScreen<Unit, ChessViewModel>(sealedActivity) {
 
     private val repository by lazy { PuzzleRepository.getInstance(lightContext) }
+    private val isForegroundFlow = MutableStateFlow(true)
 
     override val viewModelClass: Class<ChessViewModel>
         get() = ChessViewModel::class.java
 
     override fun createViewModel(): ChessViewModel = ChessViewModel(repository)
 
+    override fun willShow() {
+        super.willShow()
+        isForegroundFlow.value = true
+    }
+
+    override fun willHide() {
+        isForegroundFlow.value = false
+        super.willHide()
+    }
+
+    override fun onAppPause() {
+        isForegroundFlow.value = false
+        super.onAppPause()
+    }
+
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val ui by viewModel.ui.collectAsState()
+        val isForeground by isForegroundFlow.collectAsState()
 
         LightTheme(colors = themeColors) {
             val content = LightThemeTokens.colors.content
@@ -441,7 +458,8 @@ class ChessScreen(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    LightTopBar(
+                    BatteryTopBar(
+                        isForeground = isForeground,
                         leftButton = LightBarButton.LightIcon(
                             icon = LightIcons.BACK,
                             onClick = { goBack() },

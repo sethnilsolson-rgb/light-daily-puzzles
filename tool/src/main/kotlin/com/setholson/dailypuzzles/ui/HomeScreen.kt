@@ -88,16 +88,33 @@ class HomeScreen(
 ) : LightScreen<Unit, HomeViewModel>(sealedActivity) {
 
     private val repository by lazy { PuzzleRepository.getInstance(lightContext) }
+    private val isForegroundFlow = MutableStateFlow(true)
 
     override val viewModelClass: Class<HomeViewModel>
         get() = HomeViewModel::class.java
 
     override fun createViewModel(): HomeViewModel = HomeViewModel(repository)
 
+    override fun willShow() {
+        super.willShow()
+        isForegroundFlow.value = true
+    }
+
+    override fun willHide() {
+        isForegroundFlow.value = false
+        super.willHide()
+    }
+
+    override fun onAppPause() {
+        isForegroundFlow.value = false
+        super.onAppPause()
+    }
+
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val state by viewModel.state.collectAsState()
+        val isForeground by isForegroundFlow.collectAsState()
 
         LightTheme(colors = themeColors) {
             val content = LightThemeTokens.colors.content
@@ -110,7 +127,8 @@ class HomeScreen(
                     .background(bg),
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    LightTopBar(
+                    BatteryTopBar(
+                        isForeground = isForeground,
                         leftButton = null,
                         center = LightTopBarCenter.Text("Daily Puzzles"),
                         rightButton = LightBarButton.LightIcon(

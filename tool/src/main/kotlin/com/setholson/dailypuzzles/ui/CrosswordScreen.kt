@@ -100,9 +100,15 @@ class CrosswordViewModel(
         if (s.isLoading || s.puzzle == null || s.progress.completed) return
         val next = s.progress.copy(elapsedSeconds = s.progress.elapsedSeconds + 1)
         _ui.value = s.copy(progress = next)
-        if (next.elapsedSeconds % 10 == 0) {
+        if (next.elapsedSeconds % 30 == 0) {
             viewModelScope.launch { repository.saveCrosswordProgress(next) }
         }
+    }
+
+    fun flushProgress() {
+        val s = _ui.value
+        if (s.isLoading || s.puzzle == null) return
+        viewModelScope.launch { repository.saveCrosswordProgress(s.progress) }
     }
 
     fun onCellTap(r: Int, c: Int) {
@@ -510,21 +516,40 @@ class CrosswordScreen(
 ) : LightScreen<Unit, CrosswordViewModel>(sealedActivity) {
 
     private val repository by lazy { PuzzleRepository.getInstance(lightContext) }
+    private val isForegroundFlow = MutableStateFlow(true)
 
     override val viewModelClass: Class<CrosswordViewModel>
         get() = CrosswordViewModel::class.java
 
     override fun createViewModel(): CrosswordViewModel = CrosswordViewModel(repository)
 
+    override fun willShow() {
+        super.willShow()
+        isForegroundFlow.value = true
+    }
+
+    override fun willHide() {
+        isForegroundFlow.value = false
+        viewModel.flushProgress()
+        super.willHide()
+    }
+
+    override fun onAppPause() {
+        isForegroundFlow.value = false
+        viewModel.flushProgress()
+        super.onAppPause()
+    }
+
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val ui by viewModel.ui.collectAsState()
+        val isForeground by isForegroundFlow.collectAsState()
         var activeOverlay by remember { mutableStateOf(CrosswordOverlay.NONE) }
         var confirmReset by remember { mutableStateOf(false) }
 
-        LaunchedEffect(ui.isLoading, ui.progress.completed) {
-            while (!ui.isLoading && !ui.progress.completed) {
+        LaunchedEffect(ui.isLoading, ui.progress.completed, isForeground) {
+            while (isForeground && !ui.isLoading && !ui.progress.completed) {
                 delay(1000L)
                 viewModel.tickSecond()
             }
@@ -555,7 +580,8 @@ class CrosswordScreen(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    LightTopBar(
+                    BatteryTopBar(
+                        isForeground = isForeground,
                         leftButton = LightBarButton.LightIcon(
                             icon = LightIcons.BACK,
                             onClick = {
